@@ -1,0 +1,47 @@
+---
+title: "Information Visualization Course Project"
+output: html_notebook
+---
+
+Installs
+```{r warning=FALSE}
+install.packages('tidyverse')
+install.packages('gt')
+install.packages('sf')
+install.packages('maps')
+```
+
+Imports
+```{r}
+library(tidyverse)
+library(sf)
+library(maps)
+```
+```{r}
+# Source: https://ourworldindata.org/co2-emissions
+d <- read_csv("annual-co2-emissions-per-country.csv") |> 
+  filter(Year == 2022) |>  rename(Value=`Annual CO₂ emissions`)
+
+table(d$year) # Latest is 2022 and it has enough data to use
+
+co2 <- d |>
+  filter(Year==2022) |> select(-Year)
+head(co2)
+```
+
+```{r}
+world <- sf::st_as_sf(map('world',plot=FALSE,fill=TRUE)) |>
+  within({
+    ID[ID=="USA"] <- "United States" 
+    ID[ID=="UK"] <- "United Kingdom"
+    ID[ID=="Republic of Congo"] <- "Congo"
+    ID[ID=="Democratic Republic of the Congo"] <- "Democratic Republic of Congo"})
+
+co2_map_data <- world |>
+  left_join(dd, by=c("ID"="Entity"))
+
+ggplot() + geom_sf(data=co2_map_data, aes(fill=Value))
+
+```
+
+
