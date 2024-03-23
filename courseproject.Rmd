@@ -19,13 +19,14 @@ library(maps)
 ```
 ```{r}
 # Source: https://ourworldindata.org/co2-emissions
-d <- read_csv("annual-co2-emissions-per-country.csv") |> 
-  filter(Year == 2022) |>  rename(Value=`Annual CO₂ emissions`)
+co2 <- read_csv("annual-co2-emissions-per-country.csv") |> 
+  filter(Year == 2022) |> 
+  rename(Tonnes=`Annual CO₂ emissions`)
 
-table(d$year) # Latest is 2022 and it has enough data to use
+table(co2$Year) # Latest is 2022 and it has enough data to use
 
-co2 <- d |>
-  filter(Year==2022) |> select(-Year)
+co2 <- co2 |> select(-Code,-Year)
+
 head(co2)
 ```
 
@@ -37,11 +38,12 @@ world <- sf::st_as_sf(map('world',plot=FALSE,fill=TRUE)) |>
     ID[ID=="Republic of Congo"] <- "Congo"
     ID[ID=="Democratic Republic of the Congo"] <- "Democratic Republic of Congo"})
 
-co2_map_data <- world |>
-  left_join(dd, by=c("ID"="Entity"))
+co2_map <- world |>
+  left_join(co2, by=c("ID"="Entity"))
 
-ggplot() + geom_sf(data=co2_map_data, aes(fill=Value))
-
+ggplot() + 
+  geom_sf(data=co2_map, aes(fill=Tonnes)) +
+  scale_fill_gradient(name="CO2 (t)",trans="log")
 ```
 
 
