@@ -17,20 +17,22 @@ library(tidyverse)
 library(sf)
 library(maps)
 ```
+Data
 ```{r}
 # Source: https://ourworldindata.org/co2-emissions
-co2 <- read_csv("annual-co2-emissions-per-country.csv") |> 
-  filter(Year == 2022) |> 
-  rename(Tonnes=`Annual CO₂ emissions`)
+co2 <- read_csv("annual-co2-emissions-per-country.csv") |>
+  rename(Tonnes=`Annual CO₂ emissions`) |> 
+  select(-Code) |>
+  mutate(Year=as.integer(Year))
+
+head(co2)
 
 table(co2$Year) # Latest is 2022 and it has enough data to use
 
-co2 <- co2 |> select(-Code,-Year)
+co2_map <- co2 |> 
+  filter(Year == 2022) |> 
+  select(-Year)
 
-head(co2)
-```
-
-```{r}
 world <- sf::st_as_sf(map('world',plot=FALSE,fill=TRUE)) |>
   within({
     ID[ID=="USA"] <- "United States" 
@@ -38,12 +40,66 @@ world <- sf::st_as_sf(map('world',plot=FALSE,fill=TRUE)) |>
     ID[ID=="Republic of Congo"] <- "Congo"
     ID[ID=="Democratic Republic of the Congo"] <- "Democratic Republic of Congo"})
 
+# Data for the choropleth
 co2_map <- world |>
-  left_join(co2, by=c("ID"="Entity"))
+  left_join(co2_map, by=c("ID"="Entity"))
 
-ggplot() + 
-  geom_sf(data=co2_map, aes(fill=Tonnes)) +
-  scale_fill_gradient(name="CO2 (t)",trans="log")
+# Data for the area chart
+co2_area <- co2 |> 
+  filter(Entity %in% world$ID)
+
+# Only selecting top n countries with highest mean CO2 emissions
+co2_area_means <- co2_area |>
+  group_by(Entity) |>
+  summarize(mean=mean(Tonnes)) |>
+  slice_max(order_by = mean, na_rm=TRUE, n=10)
+
+co2_area <- co2_area |> 
+  right_join(co2_area_means, by="Entity") |>
+  select(-mean)
+head(co2_area)
 ```
 
+```{r}
+co2_line <- co2[co2$Entity == "World",]
+ggplot(co2_line, aes(Year, Tonnes)) +
+  geom_smooth() +
+  geom_point() +
+  xlim(1850, 2022)
+```
 
+```{r}
+ggplot() + 
+  geom_sf(data=co2_map, aes(fill=Tonnes)) +
+  ggtitle("CO2 Emissions (tonnes) by Country 2022") +
+  scale_fill_gradient(name="CO2 (t)",trans="log", low="white",high="darkred") +
+  guides(fill=guide_colorbar(direction = "horizontal",barwidth=25)) +
+  theme(panel.grid.major=element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position="bottom")
+```
+```{r}
+ggplot(co2_area, aes(Year,Tonnes,fill=Entity)) +
+  geom_area() +
+  xlim(1850,2022) +
+  scale_fill_brewer(palette="Set3")
+```
+Impacts of Climate Change
+```{r}
+impacts <- read_csv("Climate-related_Disasters_Frequency.csv")
+head(impacts)
+impacts <- impacts |> 
+  filter(!str_detect(Indicator, "TOTAL")) |>
+  pivot_longer(cols=matches("F\\d{4}"), names_to="year", names_prefix = "F", names_transform=list(year=as.integer), values_to="count", values_drop_na = TRUE) |>
+  mutate(event=sub("Climate related disasters frequency, Number of Disasters: ", "",Indicator)) |>
+  select(year, count, event) |>
+  group_by(year)
+head(impacts)
+```
+```{r}
+ggplot(impacts, aes(year, count, fill=event)) +
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_brewer(palette="Set1") +
+  labs(x="Year", y="Number of Events", title="Natural Events per Year", subtitle="(1980-2022)")
+  
+```
