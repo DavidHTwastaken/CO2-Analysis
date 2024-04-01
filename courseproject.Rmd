@@ -1,9 +1,17 @@
 ---
-title: "Information Visualization Course Project"
+title: "CO2 Emissions and Effects"
+author: "David Houle-Tymeczko, 100816849"
 output: html_notebook
 ---
 
-Installs
+The issue of CO2 emissions is one of the most pressing environmental challenges of our time. Carbon dioxide (CO2) is a greenhouse gas that contributes significantly to global warming and climate change. 
+
+Understanding the trends, patterns, and impacts of CO2 emissions is crucial for developing effective mitigation strategies and policies to combat climate change.
+
+This report aims to provide insights such as the global rate of CO2 emissions, which countries produce the most CO2, and an overview of the effects of increased atmospheric CO2.
+
+
+## Installs
 ```{r warning=FALSE}
 install.packages('tidyverse')
 install.packages('gt')
@@ -11,13 +19,15 @@ install.packages('sf')
 install.packages('maps')
 ```
 
-Imports
-```{r}
+## Imports
+```{r warning=FALSE}
 library(tidyverse)
 library(sf)
 library(maps)
+library(ggthemes)
 ```
-Data
+## CO2 Emissions Data
+Our World in Data provides a dataset containing the annual CO2 emissions in tonnes for each country for the years 1750 to 2022. The dataset is versatile and recent, offering many options for graphs. 
 ```{r}
 # Source: https://ourworldindata.org/co2-emissions
 co2 <- read_csv("annual-co2-emissions-per-country.csv") |>
@@ -27,8 +37,29 @@ co2 <- read_csv("annual-co2-emissions-per-country.csv") |>
 
 head(co2)
 
-table(co2$Year) # Latest is 2022 and it has enough data to use
+co2 |>
+  filter(Year==2022) |>
+  slice_max(order_by = Tonnes, na_rm=TRUE, n=20) |>
+  group_by(Entity) |>
+  head(n=20)
 
+# table(co2$Year) # Latest is 2022 and it has enough data to use
+```
+
+The following graph shows the drastic increase in annual global CO2 emissions over the course of the past 150 years.
+```{r message=FALSE, warning=FALSE}
+co2_line <- co2[co2$Entity == "World",]
+ggplot(co2_line, aes(Year, Tonnes)) +
+  labs(y="Tonnes of CO2", title="Global CO2 Emissions by Year", subtitle="(1850-2022)", caption="Figure 1") +
+  geom_smooth() +
+  geom_line(lwd=1) +
+  xlim(1850, 2022) +
+  theme_economist_white() +
+  theme(axis.title.y=element_text(margin=margin(r=10)), axis.title.x = element_text(margin=margin(t=10)))
+```
+
+Below is a choropleth map that colors the countries of the world according to the amount of CO2 emissions they produced in 2022. China and the United States stand out as particularly high producers of CO2 emissions. The colour scale is logarithmic, so slight changes in hue on the map translate to large differences in CO2 emissions.
+```{r}
 co2_map <- co2 |> 
   filter(Year == 2022) |> 
   select(-Year)
@@ -44,12 +75,25 @@ world <- sf::st_as_sf(map('world',plot=FALSE,fill=TRUE)) |>
 co2_map <- world |>
   left_join(co2_map, by=c("ID"="Entity"))
 
+ggplot() + 
+  geom_sf(data=co2_map, aes(fill=Tonnes)) +
+  labs(title="Map of CO2 Emissions by Country 2022", caption="Figure 2") +
+  scale_fill_gradient(name="CO2 (tonnes)",trans="log",breaks=scales::breaks_log(n=5, base=10), labels=scales::label_scientific(), na.value = "purple", low="lightgrey",high="darkred") +
+  guides(fill=guide_colorbar(direction = "horizontal",barwidth=25)) +
+  theme(panel.grid.major=element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position="bottom")
+```
+
+
+The following area chart shows the CO2 emissions of the top 10 countries by average annual CO2 emissions since 1850. This figure demonstrates that the United States and China each produce about the same amount of CO2 as the other 6 countries combined. The purpose of highlighting specific countries instead of regions is because the policies that are required to lower emissions will need to be implemented by individual governments.
+```{r warning=FALSE}
 # Data for the area chart
 co2_area <- co2 |> 
   filter(Entity %in% world$ID)
 
-# Only selecting top n countries with highest mean CO2 emissions
-co2_area_means <- co2_area |>
+# Only selecting top n countries with highest mean CO2 emissions since 1950
+co2_area_means <- co2_area["Year">=1850,] |>
   group_by(Entity) |>
   summarize(mean=mean(Tonnes)) |>
   slice_max(order_by = mean, na_rm=TRUE, n=10)
@@ -58,48 +102,61 @@ co2_area <- co2_area |>
   right_join(co2_area_means, by="Entity") |>
   select(-mean)
 head(co2_area)
-```
 
-```{r}
-co2_line <- co2[co2$Entity == "World",]
-ggplot(co2_line, aes(Year, Tonnes)) +
-  geom_smooth() +
-  geom_point() +
-  xlim(1850, 2022)
-```
-
-```{r}
-ggplot() + 
-  geom_sf(data=co2_map, aes(fill=Tonnes)) +
-  ggtitle("CO2 Emissions (tonnes) by Country 2022") +
-  scale_fill_gradient(name="CO2 (t)",trans="log", low="white",high="darkred") +
-  guides(fill=guide_colorbar(direction = "horizontal",barwidth=25)) +
-  theme(panel.grid.major=element_blank(), 
-        panel.grid.minor = element_blank(),
-        legend.position="bottom")
-```
-```{r}
 ggplot(co2_area, aes(Year,Tonnes,fill=Entity)) +
   geom_area() +
+  labs(y="Tonnes of CO2", title = "CO2 Emissions in Tonnes by Country",subtitle="(1850-2022)", caption="Figure 3") +
   xlim(1850,2022) +
-  scale_fill_brewer(palette="Set3")
+  scale_fill_brewer(palette="Set3") +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle=30))
 ```
-Impacts of Climate Change
+
+## Impacts of Climate Change
+Now that the trends and responsibilities of CO2 emissions have been established, the next question would be that of its impacts.
+
+The Centre for Research on the Epidemiology of Disasters (CRED) maintains a database, called Emergency Events Database (EM-DAT), containing the number of disasters of each type that occur in a year starting from 1980. Only climate related disasters (Wildfire, Storm, Landslide, Flood, Extreme Temperature, Drought) are covered. Additionally, the conditions for a disaster to be recorded are as follows:
+i.   Killed ten (10) or more people 
+ii.  Affected hundred (100) or more people 
+iii. Led to declaration of a state of emergency
+iv.  Led to call for international assistance 
+
+The Climate Change Dashboard offers a download link for the EM-DAT data up to 2022.   
 ```{r}
-impacts <- read_csv("Climate-related_Disasters_Frequency.csv")
+# Source: https://climatedata.imf.org/pages/climatechange-data
+impacts <- read_csv("Climate-related_Disasters_Frequency.csv") |>
+  pivot_longer(cols=matches("F\\d{4}"), names_to="Year", names_prefix = "F", names_transform=list(Year=as.integer), values_to="Count") |>
+  mutate(Event=sub("Climate related disasters frequency, Number of Disasters: ", "",Indicator), Count=ifelse(is.na(Count), 0, Count)) |>
+  select(Year, Count, Event)
 head(impacts)
-impacts <- impacts |> 
-  filter(!str_detect(Indicator, "TOTAL")) |>
-  pivot_longer(cols=matches("F\\d{4}"), names_to="year", names_prefix = "F", names_transform=list(year=as.integer), values_to="count", values_drop_na = TRUE) |>
-  mutate(event=sub("Climate related disasters frequency, Number of Disasters: ", "",Indicator)) |>
-  select(year, count, event) |>
-  group_by(year)
-head(impacts)
+
+impacts_bar <- impacts |> 
+  filter(Event != "TOTAL") |>
+  group_by(Year)
+head(impacts_bar)
 ```
+
+As demonstrated by the following bar graph, the annual number of climate-related disasters has been rising in the same time that CO2 emissions have increased (see Figure 1).
 ```{r}
-ggplot(impacts, aes(year, count, fill=event)) +
+ggplot(impacts_bar, aes(Year, Count, fill=Event)) +
   geom_bar(position="stack", stat="identity") +
   scale_fill_brewer(palette="Set1") +
-  labs(x="Year", y="Number of Events", title="Natural Events per Year", subtitle="(1980-2022)")
+  labs(x="Year", y="Number of Events", title="Natural Events per Year", subtitle="(1980-2022)", caption="Figure 4") +
+  theme_clean() +
+  theme(axis.title.y=element_text(margin=margin(r=10)), axis.title.x = element_text(margin=margin(t=10)))
   
 ```
+
+```{r}
+corr <- left_join(co2_line, impacts[impacts$Event=="TOTAL",], by="Year")
+ggplot(corr, aes(Tonnes, Count)) +
+  geom_point()
+```
+
+
+## Conclusion
+Climate change is an important issue and this report only scratches the surface. The largest producers of CO2 need to enact policies to reduce their carbon footprints as the number of natural disasters is positively correlated to the quantity of emissions.
+
+## References
+https://ourworldindata.org/co2-emissions
+https://climatedata.imf.org/pages/climatechange-data
